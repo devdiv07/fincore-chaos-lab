@@ -1,0 +1,27 @@
+# Demo-only dependencies.
+#
+# The Financial Operation Core runtime itself is NOT vendored and NOT installed
+# from PyPI: it is imported from the sibling read-only flagship checkout via
+# app/core_link.py. The libraries below are (a) what that runtime needs at
+# import/run time and (b) the thin web layer this demo adds on top.
+#
+# Deliberately absent: openai, razorpay, any HTTP client pointed at a provider.
+# tests/test_no_external_calls.py enforces that.
+
+# --- required by the flagship runtime (mirrors its pyproject dependencies) ---
+sqlalchemy>=2.0.30
+psycopg[binary]>=3.2
+alembic>=1.13
+pydantic>=2.7
+# fincore.engine imports fincore.authz, which uses Ed25519 for ExecutionGrant.
+# This demo does not exercise the authorization layer, but the import must resolve.
+cryptography>=42
+
+# --- demo web layer ---
+fastapi>=0.111
+uvicorn>=0.30
+
+# --- demo tests ---
+pytest>=8.2
+pytest-asyncio>=0.23
+httpx>=0.27

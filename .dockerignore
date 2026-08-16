@@ -1,0 +1,52 @@
+# Keep the build context small and keep local state out of the image.
+# The Dockerfile copies only app/ and scripts/smoke_demo.py, but an accurate
+# ignore file also stops secrets and junk being sent to the daemon at all.
+
+# --- environments and caches ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+
+# --- never ship configuration or secrets ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- version control ---
+.git/
+.gitignore
+.gitattributes
+
+# --- tests and their artifacts (no browser tooling in the runtime image) ---
+tests/
+qa/
+playwright-report/
+test-results/
+.playwright/
+htmlcov/
+.coverage
+coverage.xml
+
+# --- local development only ---
+docker-compose.yml
+start-demo.ps1
+stop-demo.ps1
+alembic.ini
+requirements.txt
+*.log
+*.sqlite
+*.db
+pgdata/
+postgres-data/
+
+# --- docs are not needed at runtime ---
+README.md
+DEPLOY.md

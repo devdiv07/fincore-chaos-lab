@@ -1,0 +1,85 @@
+{
+  "lane": "fincore",
+  "label": "FINANCIAL OPERATION CORE",
+  "events": [
+    {
+      "step": 1,
+      "type": "operation_started",
+      "title": "20 callers, one business operation",
+      "detail": "20 workers submit operation_ref “refund-demo-003” at the same instant -- the shape of a retry storm after a timeout.",
+      "lane": "fincore",
+      "source": "caller",
+      "tone": "info",
+      "attempt": 1,
+      "short": "20 concurrent callers"
+    },
+    {
+      "step": 2,
+      "type": "execution_owner_elected",
+      "title": "1 execution owner",
+      "detail": "The lease is taken by a conditional UPDATE in the database, so exactly 1 caller reached the provider. The other 19 were turned away without a second financial effect.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "good",
+      "attempt": 1,
+      "short": "1 execution owner"
+    },
+    {
+      "step": 3,
+      "type": "provider_invoked",
+      "title": "1 provider invocation",
+      "detail": "1 call reached the deterministic provider fixture, not 20.",
+      "lane": "fincore",
+      "source": "provider_fixture",
+      "tone": "neutral",
+      "attempt": 1,
+      "short": "1 provider call"
+    },
+    {
+      "step": 4,
+      "type": "provider_effect_created",
+      "title": "Refund created",
+      "detail": "Provider created rfnd_FAKE001. 1 financial effect in total.",
+      "lane": "fincore",
+      "source": "provider_fixture",
+      "tone": "good",
+      "attempt": 1,
+      "short": "1 financial effect"
+    },
+    {
+      "step": 5,
+      "type": "operation_succeeded",
+      "title": "State: SUCCEEDED",
+      "detail": "All 20 callers agree on one operation id and one provider identity. Persisted execution attempts: 1.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "good",
+      "attempt": 1,
+      "short": "Final state: SUCCEEDED"
+    }
+  ],
+  "callers": 20,
+  "execution_owners": 1,
+  "turned_away": 19,
+  "provider_invocations": 1,
+  "financial_effects": 1,
+  "refund_ids": [
+    "rfnd_FAKE001"
+  ],
+  "attempt_rows": 1,
+  "operations": 1,
+  "final_state": "SUCCEEDED",
+  "operation_ref": "refund-demo-003",
+  "distinct_operation_ids": 1,
+  "distinct_provider_keys": 1,
+  "provider_key_fingerprint": "<provider_key_fingerprint>",
+  "observed_states": [
+    "EXECUTING",
+    "SUCCEEDED"
+  ],
+  "observed_outcomes": [
+    "IN_PROGRESS",
+    "SUCCEEDED"
+  ],
+  "verdict": "ONE FINANCIAL EFFECT"
+}

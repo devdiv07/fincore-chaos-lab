@@ -1,0 +1,327 @@
+{
+  "scenario": "response_loss_then_retry",
+  "tenant_id": "<tenant_id>",
+  "run_id": "<run_id>",
+  "demo_provider": "deterministic_fixture",
+  "demo_provider_fixture": "MeasuredRazorpayRefundFake",
+  "amount_paise": 10000,
+  "amount_display": "₹100",
+  "payment_id": "pay_DEMOFIXTURE0001",
+  "naive": {
+    "lane": "naive",
+    "label": "NAIVE RETRY",
+    "events": [
+      {
+        "step": 1,
+        "type": "operation_started",
+        "title": "Refund requested",
+        "detail": "Caller asks for a ₹100 refund on pay_DEMOFIXTURE0001. No durable business-operation identity is involved.",
+        "lane": "naive",
+        "source": "caller",
+        "tone": "info",
+        "attempt": 1,
+        "short": null
+      },
+      {
+        "step": 2,
+        "type": "provider_key_created",
+        "title": "Fresh retry identity minted",
+        "detail": "Attempt #1 generated provider key sha256:<fp>.",
+        "lane": "naive",
+        "source": "caller",
+        "tone": "info",
+        "attempt": 1,
+        "short": null
+      },
+      {
+        "step": 3,
+        "type": "provider_invoked",
+        "title": "Provider invoked",
+        "detail": "Invocation #1 sent to the deterministic provider fixture.",
+        "lane": "naive",
+        "source": "provider_fixture",
+        "tone": "neutral",
+        "attempt": 1,
+        "short": null
+      },
+      {
+        "step": 4,
+        "type": "provider_effect_created",
+        "title": "Refund created",
+        "detail": "Provider created rfnd_FAKE001 for ₹100. The money moved.",
+        "lane": "naive",
+        "source": "provider_fixture",
+        "tone": "good",
+        "attempt": 1,
+        "short": "Provider created rfnd_FAKE001"
+      },
+      {
+        "step": 5,
+        "type": "response_lost",
+        "title": "Response lost",
+        "detail": "The connection closed before the response came back. The caller saw: FAILED.",
+        "lane": "naive",
+        "source": "caller",
+        "tone": "bad",
+        "attempt": 1,
+        "short": "Response lost"
+      },
+      {
+        "step": 6,
+        "type": "retry_started",
+        "title": "Caller retries",
+        "detail": "The caller treats the lost response as a failed refund and issues a brand-new request.",
+        "lane": "naive",
+        "source": "caller",
+        "tone": "warn",
+        "attempt": 2,
+        "short": null
+      },
+      {
+        "step": 7,
+        "type": "provider_key_created",
+        "title": "New provider key on retry",
+        "detail": "Attempt #2 minted sha256:<fp> — a different identity, so the provider is correct to treat this as a new operation.",
+        "lane": "naive",
+        "source": "caller",
+        "tone": "warn",
+        "attempt": 2,
+        "short": "New provider key"
+      },
+      {
+        "step": 8,
+        "type": "provider_invoked",
+        "title": "Provider invoked",
+        "detail": "Invocation #2 sent to the deterministic provider fixture.",
+        "lane": "naive",
+        "source": "provider_fixture",
+        "tone": "neutral",
+        "attempt": 2,
+        "short": null
+      },
+      {
+        "step": 9,
+        "type": "duplicate_effect_created",
+        "title": "Second refund created",
+        "detail": "Provider created rfnd_FAKE002. Two refunds now exist for one business intent.",
+        "lane": "naive",
+        "source": "provider_fixture",
+        "tone": "bad",
+        "attempt": 2,
+        "short": "Provider created rfnd_FAKE002"
+      }
+    ],
+    "provider_invocations": 2,
+    "financial_effects": 2,
+    "refund_ids": [
+      "rfnd_FAKE001",
+      "rfnd_FAKE002"
+    ],
+    "amount_refunded_paise": 20000,
+    "provider_key_fingerprints": [
+      "<provider_key_fingerprints>",
+      "<provider_key_fingerprints>"
+    ],
+    "provider_key_reused": false,
+    "response_loss_after_effect": true,
+    "caller_saw": [
+      "FAILED",
+      "SUCCEEDED"
+    ],
+    "final_state": "SUCCEEDED",
+    "verdict": "POSSIBLE DUPLICATE EFFECT"
+  },
+  "fincore": {
+    "lane": "fincore",
+    "label": "FINANCIAL OPERATION CORE",
+    "events": [
+      {
+        "step": 1,
+        "type": "operation_started",
+        "title": "Business operation declared",
+        "detail": "Trusted application code supplies operation_ref “refund-demo-001” for a ₹100 refund. The agent never invents this.",
+        "lane": "fincore",
+        "source": "caller",
+        "tone": "info",
+        "attempt": 1,
+        "short": null
+      },
+      {
+        "step": 2,
+        "type": "attempt_started",
+        "title": "Attempt #1 claimed",
+        "detail": "Runtime took the execution lease as attempt #1. A new attempt is not a new business operation.",
+        "lane": "fincore",
+        "source": "runtime_db",
+        "tone": "info",
+        "attempt": 1,
+        "short": null
+      },
+      {
+        "step": 3,
+        "type": "provider_key_created",
+        "title": "Provider identity persisted",
+        "detail": "Provider idempotency identity sha256:<fp> was written once, with the operation row. The runtime owns it, not the caller.",
+        "lane": "fincore",
+        "source": "runtime_db",
+        "tone": "info",
+        "attempt": 1,
+        "short": null
+      },
+      {
+        "step": 4,
+        "type": "provider_invoked",
+        "title": "Provider invoked",
+        "detail": "Invocation #1 sent to the deterministic provider fixture.",
+        "lane": "fincore",
+        "source": "provider_fixture",
+        "tone": "neutral",
+        "attempt": 1,
+        "short": null
+      },
+      {
+        "step": 5,
+        "type": "provider_effect_created",
+        "title": "Refund created",
+        "detail": "Provider created rfnd_FAKE001 for ₹100. The money moved.",
+        "lane": "fincore",
+        "source": "provider_fixture",
+        "tone": "good",
+        "attempt": 1,
+        "short": "Provider created rfnd_FAKE001"
+      },
+      {
+        "step": 6,
+        "type": "response_lost",
+        "title": "Response lost",
+        "detail": "The connection closed before the response was received. The runtime cannot see what the provider did.",
+        "lane": "fincore",
+        "source": "provider_fixture",
+        "tone": "bad",
+        "attempt": 1,
+        "short": "Response lost"
+      },
+      {
+        "step": 7,
+        "type": "operation_unknown",
+        "title": "State: UNKNOWN",
+        "detail": "Not failed. Not succeeded. The runtime records UNKNOWN — a first-class outcome — and refuses to guess.",
+        "lane": "fincore",
+        "source": "runtime_db",
+        "tone": "warn",
+        "attempt": 1,
+        "short": "Runtime state: UNKNOWN"
+      },
+      {
+        "step": 8,
+        "type": "retry_started",
+        "title": "Same business operation re-executed",
+        "detail": "The caller retries operation_ref “refund-demo-001”. Same operation, new attempt.",
+        "lane": "fincore",
+        "source": "caller",
+        "tone": "info",
+        "attempt": 2,
+        "short": "Same operation_ref “refund-demo-001”"
+      },
+      {
+        "step": 9,
+        "type": "provider_key_reused",
+        "title": "Persisted provider key reused",
+        "detail": "Attempt #2 sent the SAME identity sha256:<fp>. It was never regenerated.",
+        "lane": "fincore",
+        "source": "runtime_db",
+        "tone": "good",
+        "attempt": 2,
+        "short": "Persisted provider key reused"
+      },
+      {
+        "step": 10,
+        "type": "provider_invoked",
+        "title": "Provider invoked",
+        "detail": "Invocation #2 sent to the deterministic provider fixture.",
+        "lane": "fincore",
+        "source": "provider_fixture",
+        "tone": "neutral",
+        "attempt": 2,
+        "short": null
+      },
+      {
+        "step": 11,
+        "type": "provider_replayed_original",
+        "title": "Original refund replayed",
+        "detail": "Provider returned the original rfnd_FAKE001 instead of creating a second one. No new financial effect.",
+        "lane": "fincore",
+        "source": "provider_fixture",
+        "tone": "good",
+        "attempt": 2,
+        "short": null
+      },
+      {
+        "step": 12,
+        "type": "operation_reconciled",
+        "title": "Outcome reconciled",
+        "detail": "The uncertain attempt was resolved against the provider's own record of the original refund (rfnd_FAKE001).",
+        "lane": "fincore",
+        "source": "runtime_db",
+        "tone": "good",
+        "attempt": 2,
+        "short": "Original refund reconciled (rfnd_FAKE001)"
+      },
+      {
+        "step": 13,
+        "type": "operation_succeeded",
+        "title": "State: SUCCEEDED",
+        "detail": "One business operation, 2 provider invocations, 1 financial effect.",
+        "lane": "fincore",
+        "source": "runtime_db",
+        "tone": "good",
+        "attempt": 2,
+        "short": null
+      }
+    ],
+    "provider_invocations": 2,
+    "financial_effects": 1,
+    "refund_ids": [
+      "rfnd_FAKE001"
+    ],
+    "amount_refunded_paise": 10000,
+    "final_state": "SUCCEEDED",
+    "operation_ref": "refund-demo-001",
+    "operation_id": "<operation_id>",
+    "tenant_id": "<tenant_id>",
+    "attempt_ids": [
+      "<attempt_ids>",
+      "<attempt_ids>"
+    ],
+    "attempt_summary": [
+      {
+        "attempt_number": 1,
+        "attempt_type": "execution",
+        "observed_outcome": "UNKNOWN"
+      },
+      {
+        "attempt_number": 2,
+        "attempt_type": "reconciliation",
+        "observed_outcome": "SUCCEEDED"
+      }
+    ],
+    "provider_key_fingerprint": "<provider_key_fingerprint>",
+    "provider_key_reused": true,
+    "replayed": true,
+    "reconciled": true,
+    "response_loss_after_effect": true,
+    "runtime_event_types": [
+      "operation.created",
+      "execution.claimed",
+      "provider.request.started",
+      "provider.response.received",
+      "provider.outcome.unknown",
+      "execution.claimed",
+      "provider.request.started",
+      "provider.response.received",
+      "reconciliation.resolved"
+    ],
+    "intermediate_state": "UNKNOWN",
+    "verdict": "ONE FINANCIAL EFFECT"
+  }
+}

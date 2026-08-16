@@ -1,0 +1,138 @@
+{
+  "lane": "fincore",
+  "label": "FINANCIAL OPERATION CORE",
+  "events": [
+    {
+      "step": 1,
+      "type": "operation_started",
+      "title": "Business operation declared",
+      "detail": "Trusted application code supplies operation_ref “refund-demo-002” for a ₹100 refund.",
+      "lane": "fincore",
+      "source": "caller",
+      "tone": "info",
+      "attempt": 1,
+      "short": null
+    },
+    {
+      "step": 2,
+      "type": "provider_effect_created",
+      "title": "Refund created",
+      "detail": "worker-A reached the provider, which created rfnd_FAKE001 for ₹100. The money moved.",
+      "lane": "fincore",
+      "source": "provider_fixture",
+      "tone": "good",
+      "attempt": 1,
+      "short": "Provider created rfnd_FAKE001"
+    },
+    {
+      "step": 3,
+      "type": "worker_crashed",
+      "title": "Worker crashed",
+      "detail": "worker-A died before it could record the outcome. The operation is left in EXECUTING with its lease still held.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "bad",
+      "attempt": 1,
+      "short": "Worker crashed"
+    },
+    {
+      "step": 4,
+      "type": "lease_expired",
+      "title": "Lease expired",
+      "detail": "No live worker holds the operation any more, so it becomes eligible for recovery.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "warn",
+      "attempt": 1,
+      "short": null
+    },
+    {
+      "step": 5,
+      "type": "recovery_started",
+      "title": "New worker started",
+      "detail": "worker-B sweeps for operations whose lease lapsed. It reconstructs the provider call entirely from persisted state -- the caller is not asked to re-submit anything.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "info",
+      "attempt": 2,
+      "short": "New worker started"
+    },
+    {
+      "step": 6,
+      "type": "operation_loaded",
+      "title": "Same business operation loaded",
+      "detail": "worker-B resumed operation_ref “refund-demo-002”. A new worker is not a new financial operation.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "info",
+      "attempt": 2,
+      "short": "Same operation_ref “refund-demo-002”"
+    },
+    {
+      "step": 7,
+      "type": "provider_key_reused",
+      "title": "Persisted provider identity reused",
+      "detail": "Recovery sent the stored identity sha256:<fp>. It was never regenerated -- regenerating it here is what would create a second refund.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "good",
+      "attempt": 2,
+      "short": "Persisted provider identity reused"
+    },
+    {
+      "step": 8,
+      "type": "provider_invoked",
+      "title": "Provider invoked",
+      "detail": "Invocation #2 sent to the deterministic provider fixture.",
+      "lane": "fincore",
+      "source": "provider_fixture",
+      "tone": "neutral",
+      "attempt": 2,
+      "short": null
+    },
+    {
+      "step": 9,
+      "type": "provider_replayed_original",
+      "title": "Original result recovered",
+      "detail": "The provider returned the original rfnd_FAKE001 instead of creating a second refund.",
+      "lane": "fincore",
+      "source": "provider_fixture",
+      "tone": "good",
+      "attempt": 2,
+      "short": "Original refund recovered (rfnd_FAKE001)"
+    },
+    {
+      "step": 10,
+      "type": "operation_succeeded",
+      "title": "State: SUCCEEDED",
+      "detail": "One business operation survived a process death: 2 provider invocations, 1 financial effect.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "good",
+      "attempt": 2,
+      "short": "Final state: SUCCEEDED"
+    }
+  ],
+  "workers": [
+    "worker-A",
+    "worker-B"
+  ],
+  "worker_count": 2,
+  "crashed_after_provider_effect": true,
+  "state_after_crash": "EXECUTING",
+  "provider_invocations": 2,
+  "financial_effects": 1,
+  "refund_ids": [
+    "rfnd_FAKE001"
+  ],
+  "final_state": "SUCCEEDED",
+  "operation_ref": "refund-demo-002",
+  "operation_id": "<operation_id>",
+  "provider_key_fingerprint": "<provider_key_fingerprint>",
+  "provider_key_reused": true,
+  "replayed": true,
+  "reconciled": true,
+  "attempt_rows": 2,
+  "operations": 1,
+  "verdict": "ONE FINANCIAL EFFECT"
+}

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FINCORE — Financial Operation Chaos Lab</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+
+<header class="masthead">
+  <div class="wordmark">
+    <span class="mark">FINCORE</span>
+    <span class="rule" aria-hidden="true"></span>
+    <span class="sub">Financial Operation Chaos Lab</span>
+  </div>
+  <div class="masthead-right">
+    <span class="sandbox-pill">Sandbox · deterministic provider · no real money</span>
+    <button id="trust-open" class="link-btn">Why trust this?</button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============================================ hook -->
+  <section class="hook">
+    <h1>Can you make it<br>refund twice?</h1>
+    <p class="lede">
+      A provider may complete a financial action even when your application never
+      receives the response. Break the execution and see what actually happens
+      to the money.
+    </p>
+  </section>
+
+  <!-- ============================================ subject + controls -->
+  <section class="bench">
+
+    <div class="subject" id="subject">
+      <span class="eyebrow">Demo refund</span>
+      <div class="subject-amount"><span class="cur">₹</span>100</div>
+      <dl class="subject-meta">
+        <div><dt>Payment</dt><dd class="mono">pay_demo_123</dd></div>
+        <div><dt>Status</dt><dd id="subject-status" class="status">Ready</dd></div>
+      </dl>
+    </div>
+
+    <div class="controls">
+      <span class="eyebrow">Choose how it breaks</span>
+      <div class="modes" id="modes" role="tablist" aria-label="Failure mode"></div>
+
+      <div class="mode-note" id="mode-note"></div>
+      <div class="mode-control" id="mode-control"></div>
+
+      <div class="cta-row">
+        <button id="run" class="primary">Break the refund</button>
+        <button id="reset" class="link-btn">Reset</button>
+      </div>
+      <p class="cta-hint" id="cta-hint"></p>
+    </div>
+
+  </section>
+
+  <!-- ============================================ the canvas -->
+  <section class="canvas" id="canvas" hidden>
+
+    <div class="canvas-head">
+      <span class="eyebrow" id="canvas-title">Execution</span>
+      <button id="skip" class="link-btn" hidden>Skip</button>
+    </div>
+
+    <div class="flow" id="flow"></div>
+
+  </section>
+
+  <!-- ============================================ result -->
+  <section class="verdict" id="verdict" hidden>
+
+    <!-- Answers "did another financial effect happen?" before anything else. -->
+    <div class="answer" id="answer"></div>
+
+    <!-- Causal visualisation. Built entirely from verified backend fields. -->
+    <div class="stage-viz" id="stage-viz"></div>
+
+    <div class="money">
+      <span class="eyebrow">Simulated financial effects</span>
+      <div class="money-lanes" id="money-lanes"></div>
+    </div>
+
+    <div class="scoreboard" id="scoreboard"></div>
+
+    <p class="principle">
+      A retry can be a new execution attempt without becoming a new financial operation.
+    </p>
+    <p class="identity-chain">
+      <span>Business operation</span><i>≠</i><span>Execution attempt</span><i>≠</i><span>Tool / transport request</span><i>≠</i><span>Provider idempotency identity</span>
+    </p>
+
+    <details class="internals" id="internals">
+      <summary><span class="chev" aria-hidden="true"></span>Inspect internals</summary>
+      <div class="internals-body" id="internals-body"></div>
+    </details>
+
+  </section>
+
+</main>
+
+<!-- ============================================ evidence drawer -->
+<div class="drawer-scrim" id="trust-scrim" hidden></div>
+<aside class="drawer" id="trust" hidden aria-label="Why trust this">
+  <div class="drawer-head">
+    <span class="eyebrow">Why trust this?</span>
+    <button id="trust-close" class="link-btn">Close</button>
+  </div>
+
+  <p class="drawer-note">
+    This public playground runs against a deterministic provider fixture modelled
+    from measured Razorpay Test Mode behaviour. It makes no live Razorpay
+    transactions and moves no real money.
+  </p>
+
+  <a class="ev" href="https://github.com/devdiv07/financial-operation-core/tree/main/evidence/razorpay-test-mode" target="_blank" rel="noopener">
+    <span class="ev-k">Real provider measurement</span>
+    <span class="ev-t">Razorpay Test Mode</span>
+    <span class="ev-d">Response loss followed by a same-key retry recovered the original refund. Captured separately from this playground.</span>
+  </a>
+
+  <a class="ev" href="https://github.com/devdiv07/financial-operation-core/tree/main/tests" target="_blank" rel="noopener">
+    <span class="ev-k">Deterministic verification</span>
+    <span class="ev-t">Response loss · crash recovery · concurrency · intent conflict</span>
+    <span class="ev-d">The four experiments here mirror tests in the public repository.</span>
+  </a>
+
+  <a class="ev" href="https://github.com/razorpay/razorpay-mcp-server/pull/114" target="_blank" rel="noopener">
+    <span class="ev-k">Upstream contribution</span>
+    <span class="ev-t">razorpay/razorpay-mcp-server #114</span>
+    <span class="ev-d">Refund idempotency-key support. Open for review.</span>
+  </a>
+
+  <p class="drawer-foot">
+    The left-hand comparison is a deliberately weak retry strategy that regenerates
+    the provider identity. A disciplined caller that persists and reuses that key
+    avoids this specific duplicate path; Financial Operation Core additionally binds
+    it to durable business-operation state across attempts and recovery.
+  </p>
+</aside>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

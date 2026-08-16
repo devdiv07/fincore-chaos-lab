@@ -1,0 +1,70 @@
+{
+  "lane": "fincore",
+  "label": "FINANCIAL OPERATION CORE",
+  "events": [
+    {
+      "step": 1,
+      "type": "operation_started",
+      "title": "Original operation succeeded",
+      "detail": "operation_ref “refund-demo-004” refunded ₹100. Provider created rfnd_FAKE001.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "good",
+      "attempt": 1,
+      "short": "Refunded ₹100 · rfnd_FAKE001"
+    },
+    {
+      "step": 2,
+      "type": "retry_started",
+      "title": "Same operation_ref, ₹200",
+      "detail": "A second call arrives under the SAME operation_ref “refund-demo-004” asking for ₹200.",
+      "lane": "fincore",
+      "source": "caller",
+      "tone": "warn",
+      "attempt": 2,
+      "short": "Retry asks for ₹200"
+    },
+    {
+      "step": 3,
+      "type": "intent_conflict",
+      "title": "Refused: different financial intent",
+      "detail": "operation_ref already exists with a different financial intent; refusing to execute. Use a new operation_ref for a new operation.",
+      "lane": "fincore",
+      "source": "runtime_db",
+      "tone": "bad",
+      "attempt": 2,
+      "short": "Refused before the provider was contacted"
+    },
+    {
+      "step": 4,
+      "type": "provider_untouched",
+      "title": "0 extra provider invocations",
+      "detail": "The conflicting call never reached the provider, so it could not create a financial effect.",
+      "lane": "fincore",
+      "source": "provider_fixture",
+      "tone": "good",
+      "attempt": 2,
+      "short": "0 extra provider call, 0 extra effect"
+    }
+  ],
+  "original_amount_paise": 10000,
+  "retry_amount_paise": 20000,
+  "same_intent": false,
+  "conflict": true,
+  "conflict_reason": "operation_ref already exists with a different financial intent; refusing to execute. Use a new operation_ref for a new operation.",
+  "retry_outcome": "CONFLICT",
+  "provider_calls_caused_by_retry": 0,
+  "financial_effects_caused_by_retry": 0,
+  "provider_invocations": 1,
+  "financial_effects": 1,
+  "refund_ids": [
+    "rfnd_FAKE001"
+  ],
+  "amount_refunded_paise": 10000,
+  "final_state": "SUCCEEDED",
+  "operation_ref": "refund-demo-004",
+  "operation_id": "<operation_id>",
+  "provider_key_fingerprint": "<provider_key_fingerprint>",
+  "attempt_rows": 1,
+  "verdict": "CONFLICT REFUSED"
+}

@@ -1,0 +1,24 @@
+# Runtime dependencies ONLY. This is what goes into the deployed image.
+#
+# Deliberately absent, and asserted absent by tests/test_deployment.py:
+#   pytest, pytest-asyncio  - test tooling
+#   playwright              - browser automation; the runtime image must not
+#                             carry a browser or its ~400MB of dependencies
+#   openai, anthropic       - no model provider, no code path that could call one
+#   razorpay                - no provider SDK; the fixture is deterministic
+#
+# The Financial Operation Core runtime itself is NOT here. It is fetched at
+# build time from the pinned public commit (see Dockerfile) so the deployed
+# behaviour corresponds to a known revision.
+
+# --- required by the flagship runtime (mirrors its pyproject dependencies) ---
+sqlalchemy>=2.0.30
+psycopg[binary]>=3.2
+alembic>=1.13
+pydantic>=2.7
+cryptography>=42
+httpx>=0.27
+
+# --- web layer ---
+fastapi>=0.111
+uvicorn>=0.30

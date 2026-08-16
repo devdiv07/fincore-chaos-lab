@@ -1,0 +1,41 @@
+# --- environments and caches ---
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.hypothesis/
+
+# --- configuration: .env.example is the ONLY env file that may be committed ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# --- local QA captures and browser-test artifacts ---
+qa/
+playwright-report/
+test-results/
+.playwright/
+
+# --- coverage ---
+coverage*
+htmlcov/
+.coverage
+.coverage.*
+
+# --- logs and local databases ---
+*.log
+*.sqlite
+*.sqlite3
+*.db
+pgdata/
+postgres-data/
+
+# NOTE: tests/contracts/*.json are FROZEN BACKEND CONTRACTS, not artifacts.
+# They are deliberately committed -- they are what stop the frontend and
+# backend drifting apart. Do not add them here.
