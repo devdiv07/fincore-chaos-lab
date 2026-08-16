@@ -60,6 +60,83 @@ the code it demonstrates.
 Nothing else is required. There is no secret to configure, because there is no
 code path that reads one.
 
+## Two surfaces: static shell + execution API
+
+The API runs on a free tier and sleeps after inactivity. A reviewer arriving at
+a sleeping service would wait ~50 s staring at nothing, so the frontend is
+deployed separately as static files:
+
+```
+Render Static Site  (always instant)
+        |  HTTPS, CORS-allowlisted
+        v
+Render Web Service  (FastAPI, sleeps when idle)
+        |
+        v
+Neon PostgreSQL
+```
+
+The shell renders immediately, then polls `GET /ready` and enables the
+experiment controls **only** when that returns HTTP 200. Readiness is never
+inferred from elapsed time — the same rule as the experiment counters.
+
+### Render Static Site settings
+
+| Setting | Value |
+|---|---|
+| Repository | `devdiv07/fincore-chaos-lab` |
+| Branch | `main` |
+| Root Directory | *(blank — repository root)* |
+| Build Command | *(blank — there is no build step)* |
+| Publish Directory | `app/static` |
+
+There is **no `frontend/` copy of the UI**, and that is deliberate. Duplicating
+the assets would let the static site and the API drift apart — the exact class
+of bug that already cost us an afternoon when a browser served a stale bundle.
+`app/static` is the single source: the API mounts it at `/`, and the static site
+publishes the same directory. Both serve byte-identical files.
+
+Asset paths are relative (`styles.css`, not `/static/styles.css`), which is what
+lets one directory serve both surfaces without a build step rewriting anything.
+
+### Web Service settings for the split
+
+Add one variable to the **API** service:
+
+```
+FINCORE_ALLOWED_ORIGIN=https://<your-static-site>.onrender.com
+```
+
+Comma-separated if you need more than one. Leave it unset locally: with no
+value, no CORS middleware is installed at all and the API stays strictly
+same-origin.
+
+If the API URL ever changes, update the one constant at the top of
+`app/static/config.js`. It appears nowhere else — a test enforces that.
+
+### Why no cross-origin cookies
+
+The session id used to be an `HttpOnly` cookie. A `SameSite=Lax` cookie is not
+sent on cross-site `fetch`, so under the split every request would have arrived
+with a fresh session.
+
+What actually depends on session continuity is **rate limiting**. Tenant
+isolation does not: a tenant is `lab-<session>-<run>` and the run half is random
+per request, so every run is its own namespace regardless.
+
+The fix is therefore the small one — the shell holds an opaque id in
+`localStorage` and sends it as `X-Fincore-Session`. `allow_credentials` stays
+`False`, no cookie crosses origins, and the demo does not depend on third-party
+cookies surviving browser policy changes.
+
+Stated plainly: that id is not a credential. It namespaces demo rows and keys a
+rate-limit bucket, and it was equally client-controlled as a cookie, so a caller
+determined to evade the rate limit could always rotate it. Real abuse protection
+would have to sit in front of the app.
+
+The API also still serves the UI at its own URL as an engineering fallback, and
+that path continues to use the cookie because it is same-origin.
+
 ## Managed Postgres (Neon, Supabase, Render, Railway)
 
 Set `DATABASE_URL` to the connection string the provider gives you. Both

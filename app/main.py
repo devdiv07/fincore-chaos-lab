@@ -19,9 +19,10 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from . import config
 from .api import router
 from .db import dispose, get_session_factory, migrate
 from .janitor import janitor_loop
@@ -109,13 +110,31 @@ async def _headers(request: Request, call_next: Any) -> Any:
     return response
 
 
+# --------------------------------------------------------------------- CORS
+# The static shell is a different origin from this API, so browsers require an
+# explicit grant. The allowlist is exact -- never "*" -- and credentials are
+# NOT enabled: the session id travels in a header, so no cookie needs to cross
+# origins, and a wildcard-plus-credentials combination cannot arise.
+#
+# With no FINCORE_ALLOWED_ORIGIN set (local development) no CORS middleware is
+# installed at all, leaving the API strictly same-origin.
+if config.ALLOWED_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=config.ALLOWED_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["content-type", config.SESSION_HEADER],
+        max_age=600,
+    )
+    log.info("CORS enabled for %d origin(s)", len(config.ALLOWED_ORIGINS))
+
 app.include_router(router)
 
 
 # ------------------------------------------------------------------- frontend
-@app.get("/")
-async def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
-
-
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Mounted at the ROOT, and last, so the API routes above win. Serving the shell
+# here with the same relative asset paths the static site uses means both
+# surfaces serve byte-identical files -- there is no second copy of the
+# frontend to drift out of sync with this one.
+app.mount("/", StaticFiles(directory=STATIC_DIR, html=True), name="frontend")

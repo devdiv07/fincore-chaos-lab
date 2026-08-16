@@ -42,7 +42,23 @@ MAX_BODY_BYTES = 4096
 
 
 def _session_id(request: Request) -> str:
-    raw = request.cookies.get(config.SESSION_COOKIE)
+    """The opaque demo session, from the header first, then the cookie.
+
+    The static shell sends the header because its fetches are cross-site and a
+    SameSite=Lax cookie would not travel. The cookie path stays for the
+    same-origin case, where the API also serves the UI.
+
+    Either way the value is attacker-supplied and is validated to an exact
+    shape before it can reach a `tenant_id` column. Note plainly what this id
+    is: a namespace for demo rows and a rate-limit bucket. It is not a
+    credential, it authorises nothing, and it was equally client-controlled
+    when it lived in a cookie -- so a caller determined to evade the rate limit
+    could always rotate it. Real abuse protection would have to live in front
+    of the app.
+    """
+    raw = request.headers.get(config.SESSION_HEADER) or request.cookies.get(
+        config.SESSION_COOKIE
+    )
     return raw if is_valid_session_id(raw) else new_session_id()
 
 

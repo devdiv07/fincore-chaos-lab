@@ -1015,3 +1015,62 @@ body.ran .bench { transition: none; }
   .viz-lane { flex-direction: row; }
   .viz-amount { font-size: 18px; min-width: 60px; }
 }
+
+/* ------------------------------------------------------- execution readiness
+   A small honest status, not a page-dominating spinner. The dot pulses only
+   while genuinely waiting; it never implies a percentage, because there is no
+   real percentage to report. */
+.engine { display: inline-flex; align-items: center; gap: 8px; }
+
+.engine-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--ink-3);
+  flex: none;
+}
+
+.engine-text { display: inline-flex; align-items: baseline; gap: 7px; white-space: nowrap; }
+
+.engine-label {
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+.engine-value { font-size: 11.5px; color: var(--ink-2); }
+
+.engine[data-state="checking"] .engine-dot,
+.engine[data-state="waking"] .engine-dot {
+  background: var(--warn);
+  animation: engine-pulse 1.5s ease-in-out infinite;
+}
+.engine[data-state="checking"] .engine-value,
+.engine[data-state="waking"] .engine-value { color: var(--warn); }
+
+.engine[data-state="ready"] .engine-dot { background: var(--ok); }
+.engine[data-state="ready"] .engine-value { color: var(--ok); }
+
+.engine[data-state="slow"] .engine-dot { background: var(--bad); }
+.engine[data-state="slow"] .engine-value { color: var(--bad); }
+
+@keyframes engine-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+
+.engine-note {
+  margin: 10px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  max-width: 52ch;
+  line-height: 1.5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .engine-dot { animation: none !important; }
+}
+
+@media (max-width: 860px) {
+  .engine-label { display: none; }
+}

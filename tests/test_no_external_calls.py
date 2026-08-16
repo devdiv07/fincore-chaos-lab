@@ -118,7 +118,12 @@ def test_frontend_loads_no_remote_assets():
             assert 'rel="noopener"' in html
             assert match.startswith("https://github.com/"), match
         else:
-            assert match.startswith("/static/") or match.startswith("data:"), match
+            # Relative, so the identical file works from the API and the
+            # static site without a build step rewriting paths.
+            assert not match.startswith("//"), match
+            assert match in {"styles.css", "config.js", "app.js"} or match.startswith(
+                "data:"
+            ), match
 
 
 def test_no_real_credentials_in_demo_source():

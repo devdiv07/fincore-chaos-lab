@@ -17,6 +17,46 @@ const QS = new URLSearchParams(location.search);
 const STEP_MS = Number(QS.get('step')) || 620;
 const RECORDING = QS.get('recording') === '1';
 
+const CFG = window.FINCORE || { apiBase: '', sessionHeader: 'X-Fincore-Session',
+                                sessionStorageKey: 'fincore.session' };
+
+/* The opaque per-browser demo session id.
+ *
+ * It used to be an HttpOnly cookie. That cannot survive the static-shell
+ * split: the cookie is SameSite=Lax, which browsers do not send on a
+ * cross-site fetch, so every request would have arrived with a fresh session.
+ *
+ * What actually depends on session continuity is rate limiting; tenant
+ * isolation does not, because a tenant is `lab-<session>-<run>` and the run
+ * half is random per request. Moving the id into a header keeps rate limiting
+ * working without depending on third-party cookies surviving.
+ *
+ * It is not a credential and grants nothing: it namespaces demo rows and keys
+ * a rate-limit bucket. It was already client-controlled as a cookie, so this
+ * is no weaker than before.
+ */
+function sessionId() {
+  let id = null;
+  try {
+    id = localStorage.getItem(CFG.sessionStorageKey);
+  } catch { /* private mode: fall through to a per-page id */ }
+  if (!/^[0-9a-f]{16}$/.test(id || '')) {
+    const bytes = new Uint8Array(8);
+    crypto.getRandomValues(bytes);
+    id = [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+    try { localStorage.setItem(CFG.sessionStorageKey, id); } catch { /* ignore */ }
+  }
+  return id;
+}
+
+/** Every call to the execution API goes through here. No other function in
+ *  this file knows the API's location. */
+function api(path, init = {}) {
+  const headers = { ...(init.headers || {}) };
+  headers[CFG.sessionHeader] = sessionId();
+  return fetch(CFG.apiBase + path, { ...init, headers });
+}
+
 const $ = (id) => document.getElementById(id);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rupees = (paise) =>
@@ -852,7 +892,7 @@ async function play(result) {
 }
 
 async function run() {
-  if (busy) return;
+  if (busy || !engineReady) return;
   busy = true;
   skipped = false;
   userScrolled = false;
@@ -868,7 +908,7 @@ async function run() {
 
   let result;
   try {
-    const res = await fetch('/api/demo/run', {
+    const res = await api('/api/demo/run', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
@@ -880,7 +920,7 @@ async function run() {
     $('flow').innerHTML = `<p class="error-note">${err.message}</p>`;
     setStatus('Failed', 'bad');
     busy = false;
-    $('run').disabled = false;
+    $('run').disabled = !engineReady;
     $('skip').hidden = true;
     $('run').textContent = 'Break the refund';
     return;
@@ -890,9 +930,105 @@ async function run() {
   await play(result);
 
   busy = false;
-  $('run').disabled = false;
+  $('run').disabled = !engineReady;
   $('skip').hidden = true;
   $('run').textContent = 'Run again';
+}
+
+
+/* ======================================================= execution readiness
+ *
+ * The shell is static and renders instantly. The API is a free-tier service
+ * that sleeps after inactivity, so the page must be honest about whether an
+ * experiment can actually run right now.
+ *
+ * READY IS NEVER ASSUMED. It is set only when GET /ready returns HTTP 200 --
+ * never from elapsed time, never optimistically. Anything else would be the
+ * same class of lie as faking an experiment result.
+ */
+
+const READY_STATES = {
+  checking: 'Checking…',
+  waking:   'Waking up…',
+  ready:    'Ready',
+  slow:     'Taking longer than expected',
+};
+
+let engineReady = false;
+let readyPoll = null;
+
+function setEngine(state, extra) {
+  const host = $('engine');
+  if (!host) return;
+  host.dataset.state = state;
+  $('engine-value').textContent = READY_STATES[state] || state;
+  engineReady = state === 'ready';
+
+  // Experiment controls are gated on real readiness. Everything else on the
+  // page -- copy, evidence drawer, mode selection -- stays usable.
+  $('run').disabled = !engineReady || busy;
+  $('run').title = engineReady ? '' : 'The execution engine is still starting';
+
+  const note = $('engine-note');
+  if (note) note.remove();
+  if (extra) {
+    const p = document.createElement('p');
+    p.className = 'engine-note';
+    p.id = 'engine-note';
+    p.append(extra.text);
+    if (extra.retry) {
+      const b = document.createElement('button');
+      b.className = 'link-btn';
+      b.textContent = 'Try again';
+      b.addEventListener('click', () => startReadinessPolling(true));
+      p.append(' ', b);
+    }
+    $('cta-hint').after(p);
+  }
+}
+
+async function probeReady() {
+  try {
+    const res = await api('/ready', { method: 'GET', cache: 'no-store' });
+    return res.status === 200;
+  } catch {
+    return false;   // network error or the service is still asleep
+  }
+}
+
+async function startReadinessPolling(restart = false) {
+  if (readyPoll) { clearTimeout(readyPoll); readyPoll = null; }
+  if (restart) setEngine('checking');
+
+  const started = Date.now();
+  // Gentle backoff: quick at first, then easing off. A sleeping free-tier
+  // service is not helped by being hammered.
+  let delay = 2000;
+
+  const tick = async () => {
+    if (await probeReady()) {
+      setEngine('ready');
+      return;
+    }
+    const waited = Date.now() - started;
+    if (waited > 90_000) {
+      setEngine('slow', {
+        text: 'The execution engine is taking longer than expected.',
+        retry: true,
+      });
+      return;
+    }
+    if (waited > 3000) {
+      setEngine('waking', {
+        text: 'The interactive sandbox is starting after inactivity. '
+            + 'You can explore the page while it gets ready.',
+      });
+    }
+    delay = Math.min(Math.round(delay * 1.4), 8000);
+    readyPoll = setTimeout(tick, delay);
+  };
+
+  await tick();
 }
 
 /* -------------------------------------------------------------------- wiring */
@@ -903,7 +1039,7 @@ $('reset').addEventListener('click', () => {
   if (busy) return;
   clearResult();
   $('run').textContent = 'Break the refund';
-  fetch('/api/demo/reset', { method: 'POST' }).catch(() => {});
+  api('/api/demo/reset', { method: 'POST' }).catch(() => {});
 });
 
 const openDrawer = (open) => {
@@ -923,4 +1059,6 @@ document.addEventListener('keydown', (e) => {
 
 renderModes();
 selectMode(MODES[0]);
+setEngine('checking');
+startReadinessPolling();
 if (RECORDING) document.body.classList.add('recording');

@@ -117,7 +117,22 @@ RUN_TIMEOUT_SECONDS = float(os.environ.get("FINCORE_DEMO_RUN_TIMEOUT", "30"))
 DATA_RETENTION_MINUTES = int(os.environ.get("FINCORE_DEMO_RETENTION_MINUTES", "60"))
 
 #: Cookie carrying the opaque visitor session id. No personal data, no IP.
+#: Retained for the same-origin case (the API also serves the UI directly).
 SESSION_COOKIE = "fincore_lab_session"
+
+#: Header carrying the same id when the UI is served from the static site.
+#: A SameSite=Lax cookie is not sent on cross-site fetches, so the static shell
+#: supplies the id explicitly instead of depending on third-party cookies.
+SESSION_HEADER = "x-fincore-session"
+
+#: Origins permitted to call this API from a browser. Comma-separated.
+#: Empty locally, which leaves CORS entirely disabled and the API same-origin.
+#: A wildcard is never used; see app/main.py.
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.environ.get("FINCORE_ALLOWED_ORIGIN", "").split(",")
+    if o.strip()
+]
 
 #: The flagship commit this demo is pinned to. Deployment builds check this out
 #: explicitly rather than tracking main, so a published Lab always corresponds

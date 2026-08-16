@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>FINCORE — Financial Operation Chaos Lab</title>
 <link rel="icon" href="data:,">
-<link rel="stylesheet" href="/static/styles.css">
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
@@ -16,6 +16,13 @@
     <span class="sub">Financial Operation Chaos Lab</span>
   </div>
   <div class="masthead-right">
+    <span class="engine" id="engine" data-state="checking">
+      <span class="engine-dot" aria-hidden="true"></span>
+      <span class="engine-text">
+        <span class="engine-label">Execution engine</span>
+        <span class="engine-value" id="engine-value">Checking…</span>
+      </span>
+    </span>
     <span class="sandbox-pill">Sandbox · deterministic provider · no real money</span>
     <button id="trust-open" class="link-btn">Why trust this?</button>
   </div>
@@ -145,6 +152,7 @@
   </p>
 </aside>
 
-<script src="/static/app.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -84,7 +84,15 @@ class Page:
         )
 
     def open(self, url=FAST):
-        self.page.goto(url, wait_until="networkidle")
+        """Wait for the shell to render, not for the network to fall silent.
+
+        `networkidle` stopped being meaningful once the page began polling
+        /ready in the background: with a sleeping or unreachable API there is
+        no quiet moment to wait for. The shell rendering its controls is the
+        real signal that the page is usable.
+        """
+        self.page.goto(url, wait_until="domcontentloaded")
+        self.page.wait_for_selector(".mode", timeout=30_000)
         return self
 
     def choose(self, mode_id: str):
@@ -613,3 +621,159 @@ def test_reduced_motion_still_produces_a_complete_result(browser):
     assert page.is_visible(".viz-swarm")
     assert not driver.errors, driver.errors
     ctx.close()
+
+
+# ==================================================================== stage 4
+# Static shell against a sleeping API. The page is served as files; the API is
+# simulated as unreachable / slow / awake by intercepting the /ready request.
+
+
+def _shell(browser, ready_behaviour):
+    """Open the page with /ready driven by `ready_behaviour`.
+
+    behaviour: "down" (never answers), "slow" (503 then 200), "up" (200).
+    """
+    page = browser.new_page(viewport=LAPTOP)
+    driver = Page(page)
+    state = {"calls": 0}
+
+    def handle(route):
+        state["calls"] += 1
+        if ready_behaviour == "down":
+            route.abort()
+        elif ready_behaviour == "slow" and state["calls"] < 3:
+            route.fulfill(status=503, body='{"status":"not_ready"}',
+                          content_type="application/json")
+        else:
+            route.fulfill(status=200, body='{"status":"ready"}',
+                          content_type="application/json")
+
+    page.route("**/ready", handle)
+    driver.open(f"{BASE}/?step=40")
+    return page, driver, state
+
+
+def test_shell_renders_fully_while_the_api_is_unreachable(browser):
+    """The whole point of the split: the page is useful before the API wakes."""
+    page, driver, _ = _shell(browser, "down")
+    page.wait_for_timeout(1200)
+
+    body = page.inner_text("body")
+    assert "Can you make it" in body and "refund twice?" in body
+    assert "₹100" in body
+    assert len(page.query_selector_all(".mode")) == 4
+    # Evidence and mode selection stay usable with no backend at all.
+    page.click('.mode[data-mode="worker_crash"]')
+    assert page.get_attribute('.mode[data-mode="worker_crash"]', "aria-selected") == "true"
+    page.click("#trust-open")
+    assert page.is_visible("#trust")
+    page.close()
+
+
+def test_run_is_disabled_until_the_api_is_ready(browser):
+    page, driver, _ = _shell(browser, "down")
+    page.wait_for_timeout(1200)
+    assert page.is_disabled("#run"), "an experiment must not be runnable with no engine"
+    assert page.get_attribute("#engine", "data-state") in ("checking", "waking")
+    page.close()
+
+
+def test_waking_state_and_copy_appear(browser):
+    page, driver, _ = _shell(browser, "down")
+    page.wait_for_function(
+        "() => document.getElementById('engine').dataset.state === 'waking'",
+        timeout=20_000,
+    )
+    assert "Waking up" in page.inner_text("#engine")
+    note = page.inner_text("#engine-note")
+    assert "starting after inactivity" in note
+    assert "explore the page while it gets ready" in note
+    page.close()
+
+
+def test_real_ready_response_enables_the_controls(browser):
+    page, driver, _ = _shell(browser, "slow")
+    assert page.is_disabled("#run")
+    page.wait_for_function(
+        "() => document.getElementById('engine').dataset.state === 'ready'",
+        timeout=30_000,
+    )
+    assert "Ready" in page.inner_text("#engine")
+    assert page.is_enabled("#run")
+    assert not driver.errors, driver.errors
+    page.close()
+
+
+def test_no_result_is_shown_while_the_backend_is_unavailable(browser):
+    """A sleeping API must never yield a plausible-looking experiment result."""
+    page, driver, _ = _shell(browser, "down")
+    page.wait_for_timeout(1500)
+
+    assert page.is_hidden("#verdict")
+    assert page.is_hidden("#canvas")
+    body = page.inner_text("body")
+    for fabricated in ("₹200", "SUCCEEDED", "CONFLICT", "financial effect"):
+        assert fabricated not in body, f"{fabricated} shown with no backend"
+    page.close()
+
+
+def test_engine_never_reports_ready_without_a_200(browser):
+    """Elapsed time must not be mistaken for readiness."""
+    page, _, state = _shell(browser, "down")
+    page.wait_for_timeout(9000)
+    assert page.get_attribute("#engine", "data-state") != "ready"
+    assert state["calls"] >= 2, "polling should have retried"
+    page.close()
+
+
+def test_polling_backs_off_rather_than_hammering(browser):
+    page, _, state = _shell(browser, "down")
+    page.wait_for_timeout(10_000)
+    # With ~2s initial delay growing 1.4x, ten seconds is a handful of calls,
+    # nowhere near one per second.
+    assert state["calls"] <= 8, f"too many /ready probes: {state['calls']}"
+    page.close()
+
+
+def test_experiment_failure_after_ready_reports_an_error_not_a_result(browser):
+    """If the API dies mid-session the UI must say so, not invent numbers."""
+    page = browser.new_page(viewport=LAPTOP)
+    driver = Page(page)
+    page.route("**/ready", lambda r: r.fulfill(
+        status=200, body='{"status":"ready"}', content_type="application/json"))
+    page.route("**/api/demo/run", lambda r: r.abort())
+    driver.open(f"{BASE}/?step=40")
+
+    page.wait_for_function(
+        "() => document.getElementById('engine').dataset.state === 'ready'", timeout=30_000)
+    page.click("#run")
+    page.wait_for_selector(".error-note", timeout=20_000)
+
+    assert page.is_hidden("#verdict"), "no verdict may render on a failed run"
+    body = page.inner_text("body")
+    for fabricated in ("₹200", "SUCCEEDED", "CONFLICT"):
+        assert fabricated not in body
+    page.close()
+
+
+def test_session_id_is_sent_as_a_header_not_a_cookie(browser):
+    page = browser.new_page(viewport=LAPTOP)
+    driver = Page(page)
+    seen = {}
+
+    def capture(route):
+        seen["session"] = route.request.headers.get("x-fincore-session")
+        route.fulfill(status=200, body='{"status":"ready"}',
+                      content_type="application/json")
+
+    page.route("**/ready", capture)
+    driver.open(f"{BASE}/?step=40")
+    page.wait_for_function(
+        "() => document.getElementById('engine').dataset.state === 'ready'", timeout=30_000)
+
+    assert seen.get("session"), "no session header sent"
+    assert re.fullmatch(r"[0-9a-f]{16}", seen["session"]), seen["session"]
+
+    stored = page.evaluate("() => localStorage.getItem('fincore.session')")
+    assert stored == seen["session"], "the id must persist across requests"
+    page.close()
