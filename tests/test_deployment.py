@@ -246,3 +246,148 @@ def test_janitor_logs_no_sensitive_identifiers():
 
 def test_cleanup_is_not_reachable_from_the_browser(client):
     assert client.post("/api/demo/sweep").status_code in (404, 405)
+
+
+# ============================================================ Neon / managed DB
+# Regression tests for a real Render + Neon startup failure: the migration URL
+# was built by string concatenation, which corrupts a provider URL that already
+# carries query parameters.
+
+NEON = (
+    "postgresql+psycopg://neondb_owner:npg_secret@"
+    "ep-cool-darkness-a1b2c3.ap-southeast-1.aws.neon.tech/neondb"
+    "?sslmode=require&channel_binding=require"
+)
+
+
+def test_migration_url_has_exactly_one_query_string():
+    from app.db import build_migration_url
+
+    url = build_migration_url(NEON, "demo")
+    assert url.count("?") == 1, f"malformed URL: {url}"
+
+
+def test_migration_url_preserves_every_provider_parameter():
+    """sslmode and channel_binding must survive. Dropping either breaks Neon."""
+    from sqlalchemy.engine import make_url
+
+    from app.db import build_migration_url
+
+    query = dict(make_url(build_migration_url(NEON, "demo")).query)
+    assert query["sslmode"] == "require"
+    assert query["channel_binding"] == "require"
+    assert query["options"] == "-csearch_path=demo"
+
+
+def test_the_concatenation_bug_cannot_come_back():
+    """The exact corruption that produced OperationalError on Render.
+
+    Concatenating swallowed the second `?` into the preceding value, giving
+    channel_binding="require?options=-csearch_path=demo", which libpq rejects.
+    """
+    from sqlalchemy.engine import make_url
+
+    from app.db import build_migration_url
+
+    query = dict(make_url(build_migration_url(NEON, "demo")).query)
+    for key, value in query.items():
+        assert "?" not in str(value), f"{key} absorbed a query separator: {value!r}"
+
+
+def test_migration_url_keeps_a_password_with_reserved_characters():
+    from sqlalchemy.engine import make_url
+
+    from app.db import build_migration_url
+
+    tricky = "postgresql+psycopg://user:p%40ss%2Fword%3A1@host/db?sslmode=require"
+    parsed = make_url(build_migration_url(tricky, "demo"))
+    assert parsed.password == "p@ss/word:1"
+    assert dict(parsed.query)["sslmode"] == "require"
+
+
+def test_migration_url_works_without_any_query_string():
+    """The local container URL carries no parameters; it must still work."""
+    from sqlalchemy.engine import make_url
+
+    from app.db import build_migration_url
+
+    url = build_migration_url(
+        "postgresql+psycopg://fincore:fincore@127.0.0.1:55433/fincore_demo", "demo"
+    )
+    assert url.count("?") == 1
+    assert dict(make_url(url).query) == {"options": "-csearch_path=demo"}
+
+
+def test_admin_dsn_is_libpq_shaped_and_keeps_parameters():
+    from sqlalchemy.engine import make_url
+
+    from app.db import build_admin_dsn
+
+    dsn = build_admin_dsn(NEON)
+    assert dsn.startswith("postgresql://"), "psycopg needs a driverless scheme"
+    assert "+psycopg" not in dsn
+    query = dict(make_url(dsn).query)
+    assert query["sslmode"] == "require"
+    assert query["channel_binding"] == "require"
+
+
+def test_schema_name_is_not_attacker_controlled():
+    """DEMO_SCHEMA reaches CREATE SCHEMA, so it must come from config only."""
+    body = (DEMO_ROOT / "app" / "db.py").read_text(encoding="utf-8")
+    assert 'CREATE SCHEMA IF NOT EXISTS "{DEMO_SCHEMA}"' in body.replace("f'", "'").replace(
+        "f\"", "\""
+    )
+    assert re.match(r"^[a-z_][a-z0-9_]*$", config.DEMO_SCHEMA), config.DEMO_SCHEMA
+
+
+def test_migration_failure_message_carries_no_credentials():
+    """The message is logged by the platform; it must not leak the URL."""
+    body = (DEMO_ROOT / "app" / "db.py").read_text(encoding="utf-8")
+    failure = body[body.index("flagship alembic migration failed") :][:400]
+    for leak in ("sync_database_url()", "url", "dsn", "password", "DATABASE_URL"):
+        assert f"{{{leak}}}" not in failure, f"{leak} interpolated into the error"
+
+
+def test_no_manual_query_string_assembly_anywhere():
+    """The banned pattern, in every form it tends to reappear."""
+    for py in (DEMO_ROOT / "app").rglob("*.py"):
+        body = py.read_text(encoding="utf-8")
+        stripped = "\n".join(
+            line for line in body.splitlines() if not line.strip().startswith("#")
+        )
+        assert '"&" if "?" in' not in stripped, py
+        assert "'&' if '?' in" not in stripped, py
+        assert '+ f"?options=' not in stripped, py
+        assert "+ \"?options=" not in stripped, py
+
+
+def test_neon_pooler_guidance_is_documented():
+    """Neon pooled endpoints carry '-pooler' in the hostname and are not the
+    right target for DDL. The guidance must be written down, not folklore."""
+    deploy = (DEMO_ROOT / "DEPLOY.md").read_text(encoding="utf-8")
+    assert "-pooler" in deploy
+    assert "direct" in deploy.lower()
+    # ...and no provider hostname may be hardcoded in executable code.
+    # Docstrings may cite one as an example -- that is documentation, and the
+    # explanation of the concatenation bug depends on showing a real URL shape.
+    import ast
+
+    for py in (DEMO_ROOT / "app").rglob("*.py"):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                                 ast.AsyncFunctionDef))
+            and node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Constant)
+                and isinstance(node.value, str)
+                and id(node) not in docstrings
+            ):
+                assert "neon.tech" not in node.value, f"{py}: hardcoded host"

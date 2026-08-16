@@ -70,6 +70,56 @@ async def dispose() -> None:
         _engine = None
 
 
+def build_migration_url(url: str, schema: str) -> str:
+    """Add the migration search_path WITHOUT destroying the provider's own
+    query parameters.
+
+    This function exists because of a real deployment failure. The previous
+    implementation appended `"?options=-csearch_path=demo"` by string
+    concatenation. Against a local URL with no query string that happens to
+    work; against a managed provider it does not. Neon hands out:
+
+        postgresql://u:p@ep-x.neon.tech/neondb?sslmode=require&channel_binding=require
+
+    Concatenating produced a SECOND `?`, and the failure was quiet rather than
+    obvious: the URL still parses, but the trailing text is absorbed into the
+    preceding value, yielding
+
+        channel_binding = "require?options=-csearch_path=demo"
+
+    which libpq rejects — surfacing as `OperationalError` from Alembic with no
+    hint about the cause.
+
+    So the URL is parsed, the key is set structurally, and every parameter the
+    provider supplied (`sslmode`, `channel_binding`, anything else) is carried
+    through untouched. The password is preserved and URL-encoded correctly,
+    which also fixes credentials containing reserved characters.
+    """
+    from sqlalchemy.engine import make_url
+
+    parsed = make_url(url)
+    with_schema = parsed.update_query_dict(
+        {"options": f"-csearch_path={schema}"}, append=False
+    )
+    return with_schema.render_as_string(hide_password=False)
+
+
+def build_admin_dsn(url: str) -> str:
+    """A libpq DSN for the one statement Alembic cannot run for us.
+
+    `CREATE SCHEMA` has to happen before the migration, on a connection that
+    does not yet reference that schema. Only the driver name is dropped;
+    query parameters and credentials survive intact.
+    """
+    from sqlalchemy.engine import make_url
+
+    return (
+        make_url(url)
+        .set(drivername="postgresql")
+        .render_as_string(hide_password=False)
+    )
+
+
 def migrate() -> None:
     """Create the demo schema and bring it to head with FLAGSHIP migrations.
 
@@ -87,8 +137,7 @@ def migrate() -> None:
     from alembic import command
     from alembic.config import Config
 
-    dsn = sync_database_url().replace("postgresql+psycopg://", "postgresql://")
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    with psycopg.connect(build_admin_dsn(sync_database_url()), autocommit=True) as conn:
         conn.execute(f'CREATE SCHEMA IF NOT EXISTS "{DEMO_SCHEMA}"')
 
     script_location = FLAGSHIP_ROOT / "alembic"
@@ -97,8 +146,9 @@ def migrate() -> None:
 
     # env.py reads this; it is the only channel it accepts.
     previous = os.environ.get("FINCORE_DATABASE_URL")
-    os.environ["FINCORE_DATABASE_URL"] = (
-        sync_database_url() + f"?options=-csearch_path%3D{DEMO_SCHEMA}"
+    # Structured, not concatenated. See build_migration_url.
+    os.environ["FINCORE_DATABASE_URL"] = build_migration_url(
+        sync_database_url(), DEMO_SCHEMA
     )
     sys.dont_write_bytecode = True
     try:
@@ -106,6 +156,8 @@ def migrate() -> None:
         cfg.set_main_option("script_location", str(script_location))
         command.upgrade(cfg, "head")
     except Exception as exc:  # noqa: BLE001 - re-raised with context below
+        # Deliberately no URL, host, or credential in this message: it is
+        # logged by the platform and may be surfaced in build output.
         raise RuntimeError(
             f"flagship alembic migration failed ({type(exc).__name__}). "
             f"script_location={script_location}"

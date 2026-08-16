@@ -60,6 +60,46 @@ the code it demonstrates.
 Nothing else is required. There is no secret to configure, because there is no
 code path that reads one.
 
+## Managed Postgres (Neon, Supabase, Render, Railway)
+
+Set `DATABASE_URL` to the connection string the provider gives you. Both
+`postgres://` and `postgresql://` are accepted and normalised to the async
+driver internally.
+
+**Query parameters are preserved.** Managed providers append their own —
+Neon issues:
+
+```
+postgresql://user:pass@ep-xxx.region.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+```
+
+The migration step needs to add `options=-csearch_path=demo` to that URL. It
+does so by parsing the URL and setting the key structurally, never by
+concatenating `"?options=..."`. That distinction is not cosmetic: appending a
+second `?` does not raise, it gets absorbed into the preceding value, producing
+`channel_binding=require?options=-csearch_path=demo`, which libpq rejects as a
+bare `OperationalError` from Alembic. This exact bug broke a Render + Neon
+deployment; `tests/test_deployment.py` now pins the behaviour.
+
+### Neon: use the direct endpoint, not the pooler
+
+Neon offers two hostnames for the same database. The pooled one contains
+**`-pooler`**:
+
+```
+ep-cool-darkness-a1b2c3-pooler.region.aws.neon.tech   <- pooled (PgBouncer)
+ep-cool-darkness-a1b2c3.region.aws.neon.tech          <- direct
+```
+
+Use the **direct** endpoint for `DATABASE_URL`. Schema migrations issue DDL and
+depend on session-level settings (`options=-csearch_path=...`), which a
+transaction-pooled connection does not reliably carry.
+
+For a demo of this size one direct connection string is all that is needed —
+the app runs a single worker with a small pool. A separate pooled URL for
+runtime traffic is only worth adding if connection count actually becomes a
+problem, and no hostname is hardcoded anywhere in this repository.
+
 ### Optional variables
 
 | Variable | Default | Purpose |
