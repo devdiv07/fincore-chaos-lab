@@ -5,11 +5,14 @@
 An interactive sandbox for breaking financial-operation execution under response
 loss, worker crashes, concurrent callers, and changed intent.
 
+**[▶ Try the live Chaos Lab](https://fincore-chaos-lab-1.onrender.com)**  
+**[▶ Financial Operation Core](https://github.com/devdiv07/financial-operation-core)**  
+**[▶ Watch the 5-minute walkthrough](https://youtu.be/QcwbQ7QrX9o)**  
+**[▶ Razorpay MCP contribution](https://github.com/razorpay/razorpay-mcp-server/pull/114)**
+
 The public playground runs against a deterministic provider fixture modeled from
 measured Razorpay Test Mode behavior. It makes no live Razorpay transactions and
 moves no real money.
-
-**Live playground:** deployment pending
 
 ---
 
@@ -80,7 +83,7 @@ directory. Set `FINCORE_FLAGSHIP_PATH` if it lives elsewhere.
 ```
 
 ```powershell
-.venv\Scripts\python -m pytest              # 198 tests
+.venv\Scripts\python -m pytest              # 239 tests
 .venv\Scripts\python scripts\smoke_demo.py  # headless scenario check
 ```
 
@@ -89,8 +92,10 @@ when either is absent.
 
 ## Deploying
 
-See [`DEPLOY.md`](DEPLOY.md). One web service plus one PostgreSQL service; the
-only variable required is `DATABASE_URL`, and `PORT` comes from the host.
+See [`DEPLOY.md`](DEPLOY.md). One web service, one PostgreSQL service, and a
+static site for the frontend. The API needs `DATABASE_URL`, plus
+`FINCORE_ALLOWED_ORIGIN` set to the static site's origin so its browser calls
+are permitted. `PORT` comes from the host.
 
 ```bash
 docker build -t fincore-lab:candidate .
@@ -107,7 +112,7 @@ app/              FastAPI application, experiments, static frontend
   limits.py         rate limiting, safe error envelope
   janitor.py        bounded in-process cleanup
   core_link.py      pinned-runtime binding and provenance check
-tests/            198 tests, incl. frozen backend contracts and browser tests
+tests/            239 tests, incl. frozen backend contracts and browser tests
 scripts/          smoke test, contract snapshots, deployment verification
 ```
 
